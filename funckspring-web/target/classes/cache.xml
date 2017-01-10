@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:cache="http://www.springframework.org/schema/cache"
+       xmlns:p="http://www.springframework.org/schema/p"
+
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+
+             http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd">
+
+
+    <!-- ======================以下是spring 缓存 相关 ====================== -->
+    <!--启用缓存注解功能-->
+    <cache:annotation-driven cache-manager="cacheManager"/>
+
+
+    <!--http://blog.csdn.net/yang7678287/article/details/50844479-->
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig"
+          p:maxIdle="6"
+          p:maxTotal="50"
+          p:maxWaitMillis="1000"
+          p:minEvictableIdleTimeMillis="300000"
+          p:numTestsPerEvictionRun="3"
+          p:timeBetweenEvictionRunsMillis="60000">
+        <!--对拿到的connection进行validateObject校验-->
+        <property name="testOnBorrow" value="true"/>
+        <!--在进行returnObject对返回的connection进行validateObject校验-->
+        <property name="testOnReturn" value="false"/>
+        <!--定时对线程池中空闲的链接进行validateObject校验-->
+        <property name="testWhileIdle" value="false"/>
+    </bean>
+
+    <bean id="connectionFactory"
+          class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <property name="poolConfig" ref="poolConfig"/>
+        <property name="port" value="6379"/>
+        <property name="hostName" value="localhost"/>
+        <!--<property name="timeout" value="1000" />-->
+    </bean>
+
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate"
+          p:connection-factory-ref="connectionFactory">
+        <!-- 下面这两个属性是重载，不要也可以 -->
+        <!-- 加这个可以去掉redis key 钱的\xac\xed\x00\x05t\x00\t  乱码-->
+        <property name="keySerializer">
+            <bean class="org.springframework.data.redis.serializer.StringRedisSerializer"/>
+        </property>
+        <!--<property name="valueSerializer">-->
+        <!--<bean class="org.springframework.data.redis.serializer.JdkSerializationRedisSerializer"/>-->
+        <!--</property>-->
+    </bean>
+
+    <bean id="cacheManager" class="org.springframework.data.redis.cache.RedisCacheManager">
+        <!-- 缺省超时时间 单位是秒  -->
+        <property name="defaultExpiration" value="3600"/>
+        <constructor-arg ref="redisTemplate"/>
+        <!-- 下面列表每一项对应一个Cache对象的名字，也就是@Cacheable的value指向的值 -->
+        <constructor-arg>
+            <list>
+                <value>default</value><!-- 缓存名，在注解中用value引用 -->
+                <value>user</value><!-- 可以配置多个缓存，以实现不同的超时策略 -->
+            </list>
+        </constructor-arg>
+        <!-- 用expires属性分别配置其超时时间，缺省则使用defaultExpiration，单位均为秒 -->
+        <property name="expires">
+            <map>
+                <entry key="user" value="0"/><!-- 此缓存永不超时，即使Redis重启也不会丢失哟 -->
+            </map>
+        </property>
+    </bean>
+
+
+</beans>
